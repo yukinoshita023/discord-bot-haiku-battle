@@ -15,8 +15,8 @@ FLOWER_NAMES = [
 
 VOTE_A = "🌸"
 VOTE_B = "🌺"
-VOTE_THRESHOLD = 5
-VOTE_TIMEOUT = 60  # 1分(秒)
+VOTE_THRESHOLD = 4
+VOTE_TIMEOUT = 600  # 10分(秒)
 MAX_HAIKU_LENGTH = 10
 
 _URL_RE = re.compile(r'https?://', re.IGNORECASE)
@@ -197,7 +197,7 @@ async def _start_voting(bot: discord.Client, channel: discord.TextChannel):
         value=f"```{_b.haiku('B')}```",
         inline=False,
     )
-    embed.set_footer(text=f"🌸か🌺でリアクション！先に{VOTE_THRESHOLD}票 or 1分後に多い方の勝ち！")
+    embed.set_footer(text=f"🌸か🌺でリアクション！先に{VOTE_THRESHOLD}票獲得 or 10分後に多い方の勝ち！")
 
     vote_msg = await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
     await vote_msg.add_reaction(VOTE_A)
@@ -281,9 +281,10 @@ async def _finish(
         return
     _b.state = "IDLE"
 
-    if _b._timeout_task:
+    current_task = asyncio.current_task()
+    if _b._timeout_task and _b._timeout_task is not current_task:
         _b._timeout_task.cancel()
-        _b._timeout_task = None
+    _b._timeout_task = None
 
     winner_name = _b.names[winner]
     winners = _b.members(winner)
