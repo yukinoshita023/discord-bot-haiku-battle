@@ -16,7 +16,8 @@ FLOWER_NAMES = [
 VOTE_A = "🌸"
 VOTE_B = "🌺"
 VOTE_THRESHOLD = 4
-VOTE_TIMEOUT = 600  # 10分(秒)
+VOTE_TIMEOUT_INITIAL = 6 * 3600   # 無投票時: 6時間
+VOTE_TIMEOUT_AFTER_VOTE = 1800    # 初票後: 30分
 MAX_HAIKU_LENGTH = 10
 
 _URL_RE = re.compile(r'https?://', re.IGNORECASE)
@@ -74,6 +75,7 @@ class _Battle:
         self.vote_msg_id = None
         self.prompt_msg_id = 0  # この案内より後のメッセージだけ受け付ける
         self._timeout_task = None
+        self.first_vote_received = False
 
     def reset(self):
         if self._timeout_task:
@@ -84,6 +86,7 @@ class _Battle:
         self.parts = {"A": [], "B": []}
         self.vote_msg_id = None
         self.prompt_msg_id = 0
+        self.first_vote_received = False
         self.state = "A1"
 
     def members(self, team: str) -> set:
@@ -197,7 +200,7 @@ async def _start_voting(bot: discord.Client, channel: discord.TextChannel):
         value=f"```{_b.haiku('B')}```",
         inline=False,
     )
-    embed.set_footer(text=f"🌸か🌺でリアクション！先に{VOTE_THRESHOLD}票獲得 or 10分後に多い方の勝ち！")
+    embed.set_footer(text=f"🌸か🌺でリアクション！先に{VOTE_THRESHOLD}票で即勝利 / 初票から30分後 or 無投票なら6時間後に多い方の勝ち！")
 
     vote_msg = await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
     await vote_msg.add_reaction(VOTE_A)
@@ -206,13 +209,13 @@ async def _start_voting(bot: discord.Client, channel: discord.TextChannel):
     _b.vote_msg_id = vote_msg.id
     _b.state = "VOTING"
     _b._timeout_task = asyncio.create_task(
-        _timeout_handler(bot, channel, vote_msg.id)
+        _timeout_handler(bot, channel, vote_msg.id, VOTE_TIMEOUT_INITIAL)
     )
 
 
-async def _timeout_handler(bot: discord.Client, channel: discord.TextChannel, msg_id: int):
+async def _timeout_handler(bot: discord.Client, channel: discord.TextChannel, msg_id: int, timeout: int = VOTE_TIMEOUT_AFTER_VOTE):
     try:
-        await asyncio.sleep(VOTE_TIMEOUT)
+        await asyncio.sleep(timeout)
     except asyncio.CancelledError:
         return
 
@@ -247,6 +250,16 @@ async def handle_reaction(bot: discord.Client, payload: discord.RawReactionActio
     channel = bot.get_channel(payload.channel_id)
     if channel is None:
         return
+
+    # 初リアクション: 6時間タイマーを10分タイマーに切り替え
+    async with _lock:
+        if _b.state == "VOTING" and not _b.first_vote_received:
+            _b.first_vote_received = True
+            if _b._timeout_task:
+                _b._timeout_task.cancel()
+            _b._timeout_task = asyncio.create_task(
+                _timeout_handler(bot, channel, payload.message_id, VOTE_TIMEOUT_AFTER_VOTE)
+            )
 
     try:
         msg = await channel.fetch_message(payload.message_id)
