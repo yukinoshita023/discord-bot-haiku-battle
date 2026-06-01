@@ -129,7 +129,7 @@ async def handle_message(bot: discord.Client, message: discord.Message):
         return
 
     user_id = message.author.id
-    action = None  # ("reject", reply_text) | ("accept", team, next_state)
+    team = next_state = None
 
     async with _lock:
         if _b.state not in _FLOW:
@@ -138,22 +138,9 @@ async def handle_message(bot: discord.Client, message: discord.Message):
             return  # 案内より前に送られたメッセージは無視
 
         team, _, _, next_state = _FLOW[_b.state]
-        other_team = "B" if team == "A" else "A"
+        _b.parts[team].append((user_id, message.content))
+        _b.state = next_state
 
-        if user_id in _b.members(team):
-            action = ("reject", f"あなたはすでにチーム **{_b.names[team]}** の俳句に参加しています！他の人に任せましょう 🙏")
-        elif user_id in _b.members(other_team):
-            action = ("reject", f"あなたはすでにチーム **{_b.names[other_team]}** の俳句に参加しています！他の人に任せましょう 🙏")
-        else:
-            _b.parts[team].append((user_id, message.content))
-            _b.state = next_state
-            action = ("accept", team, next_state)
-
-    if action[0] == "reject":
-        await message.reply(action[1], mention_author=False)
-        return
-
-    _, team, next_state = action
     await message.add_reaction("✅")
 
     if next_state == "VOTING":
@@ -176,8 +163,7 @@ async def handle_message(bot: discord.Client, message: discord.Message):
         next_team, next_part, next_mora, _ = _FLOW[next_state]
         embed = discord.Embed(
             description=(
-                f"チーム **{_b.names[next_team]}** — **第{next_part}句（{next_mora}音）**\n"
-                "別の人が書いてください"
+                f"チーム **{_b.names[next_team]}** — **第{next_part}句（{next_mora}音）**"
             ),
             color=discord.Color.from_rgb(255, 182, 193),
         )
