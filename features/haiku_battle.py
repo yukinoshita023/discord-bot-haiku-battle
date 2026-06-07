@@ -18,7 +18,7 @@ VOTE_B = "🌺"
 VOTE_THRESHOLD = 4
 VOTE_TIMEOUT_INITIAL = 6 * 3600   # 無投票時: 6時間
 VOTE_TIMEOUT_AFTER_VOTE = 1800    # 初票後: 30分
-MAX_HAIKU_LENGTH = 10
+MAX_HAIKU_LENGTH = 25
 
 _URL_RE = re.compile(r'https?://', re.IGNORECASE)
 _MENTION_RE = re.compile(r'<[@#][!&]?\d+>')        # @user @role #channel
@@ -51,7 +51,7 @@ def _validate_haiku(message: discord.Message) -> str | None:
     ):
         return "絵文字は使えません 🙅"
     if len(message.content) > MAX_HAIKU_LENGTH:
-        return f"10文字以内で書いてください（{len(message.content)}文字） 🙅"
+        return f"25文字以内で書いてください（{len(message.content)}文字） 🙅"
     return None
 
 # state → (team, 句番号, 音数, 次のstate)
